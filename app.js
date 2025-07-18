@@ -49,10 +49,14 @@ app.get("/listings/:id", async (req, res) => {
 });
 
 //Create route
-app.post("/listings", async (req, res) => {
-  const newListing = new Listing(req.body.listing);
-  await newListing.save();
-  res.redirect("/listings");
+app.post("/listings", async (req, res, next) => {
+  try {
+    const newListing = new Listing(req.body.listing);
+    await newListing.save();
+    res.redirect("/listings");
+  } catch (err) {
+    next(err);
+  }
 });
 
 //Edit route
@@ -63,10 +67,18 @@ app.get("/listings/:id/edit", async (req, res) => {
 });
 
 //Update route
-app.put("/listings/:id", async (req, res) => {
-  let { id } = req.params;
-  await Listing.findByIdAndUpdate(id, { ...req.body.listing });
-  res.redirect(`/listings/${id}`);
+app.put("/listings/:id", async (req, res, next) => {
+  try {
+    let { id } = req.params;
+    await Listing.findByIdAndUpdate(
+      id,
+      { ...req.body.listing },
+      { runValidators: true }
+    );
+    res.redirect(`/listings/${id}`);
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.delete("/listings/:id", async (req, res) => {
@@ -74,6 +86,10 @@ app.delete("/listings/:id", async (req, res) => {
   let deletedListing = await Listing.findByIdAndDelete(id);
   console.log(deletedListing);
   res.redirect("/listings");
+});
+
+app.use((err, req, res) => {
+  res.send("something went wrong!");
 });
 
 app.listen(3000, () => {
