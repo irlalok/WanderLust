@@ -7,6 +7,8 @@ const methodOverride = require("method-override");
 const ejsMate = require("ejs-mate");
 const wrapAsync = require("./utils/wrapAsync.js");
 const ExpressError = require("./utils/ExpressError.js");
+const { listingSchema, reviewSchema } = require("./schema.js");
+const Review = require("./models/review.js");
 
 app.engine("ejs", ejsMate);
 app.set("view engine", "ejs");
@@ -31,6 +33,28 @@ main()
 app.get("/", (req, res) => {
   res.redirect("/listings");
 });
+
+const validateListing = (req, res, next) => {
+  let { error } = listingSchema.validate(req.body);
+
+  if (error) {
+    let errMsg = error.details.map((el) => el.message).join(",");
+    throw new ExpressError(400, error);
+  } else {
+    next();
+  }
+};
+
+const validateReview = (req, res, next) => {
+  let { error } = reviewSchema.validate(req.body);
+
+  if (error) {
+    let errMsg = error.details.map((el) => el.message).join(",");
+    throw new ExpressError(400, errMsg);
+  } else {
+    next();
+  }
+};
 
 //Index route
 app.get(
@@ -59,7 +83,13 @@ app.get(
 //Create route
 app.post(
   "/listings",
+  validateListing,
   wrapAsync(async (req, res, next) => {
+    let result = listingSchema.validate(req.body);
+    console.log(result);
+    if (result.error) {
+      throw new ExpressError(400, result.error);
+    }
     const newListing = new Listing(req.body.listing);
     await newListing.save();
     res.redirect("/listings");
@@ -79,6 +109,7 @@ app.get(
 //Update route
 app.put(
   "/listings/:id",
+  validateListing,
   wrapAsync(async (req, res) => {
     let { id } = req.params;
     await Listing.findByIdAndUpdate(
@@ -90,6 +121,7 @@ app.put(
   })
 );
 
+//Delete route
 app.delete(
   "/listings/:id",
   wrapAsync(async (req, res) => {
@@ -100,13 +132,31 @@ app.delete(
   })
 );
 
-// app.all("*", (req, res, next) => {
-//   next(new ExpressError(404, "Page not found"));
-// });
+//Reviews
+//Post route
+app.post(
+  "/listings/:id/reviews",
+  validateReview,
+  wrapAsync(async (req, res) => {
+    let listing = await Listing.findById(req.params.id);
+    let newReview = new Review(req.body.review);
+
+    listing.reviews.push(newReview);
+
+    await newReview.save();
+    await listing.save();
+
+    res.redirect(`/listings/${listing._id}`);
+  })
+);
+
+app.all("*", (req, res, next) => {
+  next(new ExpressError(404, "Page not found"));
+});
 
 app.use((err, req, res, next) => {
   let { statusCode = 500, message = "Something went wrong!" } = err;
-  res.status(statusCode).send(message);
+  res.status(statusCode).render("error.ejs", { message });
 });
 
 app.listen(3000, () => {
